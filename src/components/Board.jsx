@@ -2,13 +2,12 @@ import React, { useEffect, useState } from 'react'
 import "./Board.css";
 import Tile from "./Tile";
 import Piece, { PieceType } from './Piece';
+import useWebSocket from 'react-use-websocket';
+
+const WS_URL = "ws://localhost:8080/echoHandler"
 
 const yAxis = [1, 2, 3, 4, 5, 6, 7, 8];
 const xAxis = [1, 2, 3, 4, 5, 6, 7, 8];
-const matrix = [
-    [1, 2, 3, 4, 5, 6, 7, 8],
-    [1, 2, 3, 4, 5, 6, 7, 8]
-];
 
 const initialWhitePositions = [
   [1, 1],
@@ -56,8 +55,38 @@ const boardHeight = 500;
 
 function Board() {
 
+  const { sendJsonMessage } = useWebSocket(WS_URL, {
+    share: true,
+    onOpen: () => {
+      console.log("ISOPENDED")
+    },
+    onError: (err) => {
+      console.warn(err)
+    },
+    onMessage: (message) => {
+      const content = JSON.parse(message.data).content;
+      console.log(content)
+      setBlackPositions(prevPos => content.blackPositions);
+      setWhitePositions(prevPos => content.whitePositions);
+    }
+  })
+
   const [blackPositions, setBlackPositions] = useState(initialBlackPositions);
   const [whitePositions, setWhitePositions] = useState(initialWhitePositions);
+  const [boardUpdate, setBoardUpdate] = useState(0);
+
+  useEffect(() => {
+    
+    sendJsonMessage({
+      type: 'contentchange',
+      content: {
+        whitePositions: whitePositions,
+        blackPositions: blackPositions
+      }
+    })
+
+  }, [boardUpdate])
+  
 
   const squareWidth = boardWidth / xAxis.length
   const squareHeight = boardHeight / yAxis.length
@@ -107,6 +136,7 @@ function Board() {
         moveWhitePiece(fromY, fromX, toY, toX);
       }
     }
+
   }
 
   function moveBlackPiece(fromY, fromX, toY, toX) {
@@ -115,6 +145,7 @@ function Board() {
       const filtered = prevPositions.filter((item, index) => index != blackIndex);
       return [...filtered, [toY, toX]]
     })
+    setBoardUpdate(prevUpdate => prevUpdate + 1)
   }
 
   function moveWhitePiece(fromY, fromX, toY, toX) {
@@ -123,24 +154,16 @@ function Board() {
       const filtered = prevPositions.filter((item, index) => index != whiteIndex);
       return [...filtered, [toY, toX]]
     })
+    setBoardUpdate(prevUpdate => prevUpdate + 1)
   }
 
-  function eatBlackPiece(positionY, positionX) {
+  function removePiecePiece(positionY, positionX) {
     setBlackPositions((prevPositions) => {
       const blackIndex = getPiecesIndex(prevPositions, positionY, positionX);
       const filtered = prevPositions.filter((item, index) => index != blackIndex);
       return filtered
     })
   }
-
-  function eatWhitePiece(positionY, positionX) {
-    setWhitePositions((prevPositions) => {
-      const whiteIndex = getPiecesIndex(prevPositions, positionY, positionX);
-      const filtered = prevPositions.filter((item, index) => index != whiteIndex);
-      return filtered
-    })
-  }
-
 
   return (
     <div className='board'>
