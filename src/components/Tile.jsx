@@ -18,7 +18,7 @@ function Tile({ xPosition, yPosition, squareWidth, squareHeight, children, moveP
   const background = isDark ? "#78553c" : "#f0c990"
   return (
     <div ref={drop} key={"tile" + yPosition + xPosition} style={{width: squareWidth, height: squareHeight, background: background}}>
-     {yPosition} - {xPosition}
+     
      {children}
     </div>
   )

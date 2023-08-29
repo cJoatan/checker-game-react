@@ -1,8 +1,11 @@
-import React, { useEffect, useState } from 'react'
+import React, { useEffect, useRef, useState } from 'react'
 import "./Board.css";
 import Tile from "./Tile";
 import Piece, { PieceType } from './Piece';
 import useWebSocket from 'react-use-websocket';
+import { DndProvider } from 'react-dnd';
+import { HTML5Backend } from 'react-dnd-html5-backend';
+import { Button } from 'react-bootstrap';
 
 const WS_URL = "ws://localhost:8080/echoHandler"
 
@@ -53,7 +56,17 @@ const initialBlackPositions = [
 const boardWidth = 500;
 const boardHeight = 500;
 
+const ENTER_A_GAME = "enter_a_game";
+
 function Board() {
+
+  const boardId = useRef("");
+  const [boardStatus, setBoardStatus] = useState("");
+  const [blackPositions, setBlackPositions] = useState(initialBlackPositions);
+  const [whitePositions, setWhitePositions] = useState(initialWhitePositions);
+  const [boardUpdate, setBoardUpdate] = useState(0);
+  const [gameAccessCode, setGameAccessCode] = useState("");
+  const [enterGameCode, setEnterGameCode] = useState("");
 
   const { sendJsonMessage } = useWebSocket(WS_URL, {
     share: true,
@@ -64,21 +77,27 @@ function Board() {
       console.warn(err)
     },
     onMessage: (message) => {
-      const content = JSON.parse(message.data).content;
-      console.log(content)
-      setBlackPositions(prevPos => content.blackPositions);
-      setWhitePositions(prevPos => content.whitePositions);
+      const data = JSON.parse(message.data);
+      console.log(data)
+
+      if (!!data.id) {
+        boardId.current = data.id
+      }
+
+      if (!!data.content) {
+        setBlackPositions(prevPos => data.content.blackPositions);
+        setWhitePositions(prevPos => data.content.whitePositions);
+      } else if (data.status === "WAITING_OPPONENT") {
+        setGameAccessCode(prev => data.code);
+      }
     }
   })
-
-  const [blackPositions, setBlackPositions] = useState(initialBlackPositions);
-  const [whitePositions, setWhitePositions] = useState(initialWhitePositions);
-  const [boardUpdate, setBoardUpdate] = useState(0);
 
   useEffect(() => {
     
     sendJsonMessage({
-      type: 'contentchange',
+      id: boardId.current,
+      type: 'content_change',
       content: {
         whitePositions: whitePositions,
         blackPositions: blackPositions
@@ -86,6 +105,19 @@ function Board() {
     })
 
   }, [boardUpdate])
+
+  useEffect(() => {
+    if (boardStatus === ENTER_A_GAME) {
+      sendJsonMessage({
+        type: 'enter_a_game',
+        code: enterGameCode,
+        content: {
+          whitePositions: whitePositions,
+          blackPositions: blackPositions
+        }
+      })
+    }
+  }, [boardStatus])
   
 
   const squareWidth = boardWidth / xAxis.length
@@ -165,29 +197,50 @@ function Board() {
     })
   }
 
-  return (
-    <div className='board'>
-        {yAxis.map((yItem) => 
-          xAxis.map((xItem) => {
+  function createNewGame() {
+    sendJsonMessage({
+      type: 'create_new_game'
+    })
+  }
 
-            return <Tile
-              key={"tile" + yItem + xItem}
-              xPosition={xItem}
-              yPosition={yItem}
-              squareWidth={squareWidth}
-              squareHeight={squareHeight}
-              movePiece={movePiece}
-            >
-              {renderPiece(yItem, xItem) && 
-                <Piece  
-                  xPosition={xItem}
-                  yPosition={yItem}
-                  pieceType={pieceType(yItem, xItem)} 
-                />}
-            </Tile>
-          })
-        )}
-    </div>
+  function enterAGame() {
+    console.log("setBoardStatus(ENTER_A_GAME);")
+    setBoardStatus(ENTER_A_GAME);
+  }
+
+  return (
+    <DndProvider backend={HTML5Backend}>
+
+      <Button onClick={createNewGame}>Create new Game</Button>
+
+      {gameAccessCode}
+      <br/>
+
+      <input type="text" value={enterGameCode} onChange={(event) => setEnterGameCode(event.target.value)} /> <Button onClick={enterAGame}>Enter a game</Button>
+      {enterGameCode}
+      <div className='board'>
+          {yAxis.map((yItem) => 
+            xAxis.map((xItem) => {
+
+              return <Tile
+                key={"tile" + yItem + xItem}
+                xPosition={xItem}
+                yPosition={yItem}
+                squareWidth={squareWidth}
+                squareHeight={squareHeight}
+                movePiece={movePiece}
+              >
+                {renderPiece(yItem, xItem) && 
+                  <Piece  
+                    xPosition={xItem}
+                    yPosition={yItem}
+                    pieceType={pieceType(yItem, xItem)} 
+                  />}
+              </Tile>
+            })
+          )}
+      </div>
+    </DndProvider>
   )
 }
 
