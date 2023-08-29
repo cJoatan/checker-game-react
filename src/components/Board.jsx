@@ -10,63 +10,63 @@ import { Button } from 'react-bootstrap';
 const WS_URL = "ws://localhost:8080/echoHandler"
 
 const yAxis = [1, 2, 3, 4, 5, 6, 7, 8];
-const xAxis = [1, 2, 3, 4, 5, 6, 7, 8];
+const xAxis = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12];
 
 const initialWhitePositions = [
   [1, 1],
-  [1, 2],
   [1, 3],
-  [1, 4],
   [1, 5],
-  [1, 6],
   [1, 7],
-  [1, 8],
 
-  [2, 1],
   [2, 2],
-  [2, 3],
   [2, 4],
-  [2, 5],
   [2, 6],
-  [2, 7],
   [2, 8],
   
+  [3, 1],
+  [3, 3],
+  [3, 5],
+  [3, 7],
 ]
 
 const initialBlackPositions = [
-  [7, 1],
-  [7, 2],
-  [7, 3],
-  [7, 4],
-  [7, 5],
-  [7, 6],
-  [7, 7],
-  [7, 8],
+  [6, 2],
+  [6, 4],
+  [6, 6],
+  [6, 8],
 
-  [8, 1],
+  [7, 1],
+  [7, 3],
+  [7, 5],
+  [7, 7],
+
   [8, 2],
-  [8, 3],
   [8, 4],
-  [8, 5],
   [8, 6],
-  [8, 7],
   [8, 8]
 ]
 
-const boardWidth = 500;
+const deadZone = [
+
+]
+
+const boardWidth = 660;
 const boardHeight = 500;
 
 const ENTER_A_GAME = "enter_a_game";
+const CREATE_NEW_GAME_OR_ENTER_A_GAME = "create_new_game_or_enter_a_game";
+const PLAYING = "playing";
 
 function Board() {
 
   const boardId = useRef("");
-  const [boardStatus, setBoardStatus] = useState("");
+  const [boardStatus, setBoardStatus] = useState(CREATE_NEW_GAME_OR_ENTER_A_GAME);
   const [blackPositions, setBlackPositions] = useState(initialBlackPositions);
   const [whitePositions, setWhitePositions] = useState(initialWhitePositions);
   const [boardUpdate, setBoardUpdate] = useState(0);
   const [gameAccessCode, setGameAccessCode] = useState("");
   const [enterGameCode, setEnterGameCode] = useState("");
+  const [movePiece, setMovePiece] = useState({});
 
   const { sendJsonMessage } = useWebSocket(WS_URL, {
     share: true,
@@ -84,11 +84,13 @@ function Board() {
         boardId.current = data.id
       }
 
-      if (!!data.content) {
+      if (data.type === "content_change") {
         setBlackPositions(prevPos => data.content.blackPositions);
         setWhitePositions(prevPos => data.content.whitePositions);
       } else if (data.status === "WAITING_OPPONENT") {
         setGameAccessCode(prev => data.code);
+      } else if (data.status === "START_GAME") {
+        setBoardStatus(prev => PLAYING);
       }
     }
   })
@@ -118,6 +120,24 @@ function Board() {
       })
     }
   }, [boardStatus])
+
+  useEffect(() => {
+    
+    if (movePiece.pieceType === PieceType.BLACK) {
+
+      const canMove = !isBlackMarked(movePiece.toY, movePiece.toX) && !isWhiteMarked(movePiece.toY, movePiece.toX);
+      if (canMove) {
+        moveBlackPiece(movePiece.fromY, movePiece.fromX, movePiece.toY, movePiece.toX);
+      }
+    
+    } else if (movePiece.pieceType === PieceType.WHITE) {
+
+      const canMove = !isWhiteMarked(movePiece.toY, movePiece.toX) && !isBlackMarked(movePiece.toY, movePiece.toX);
+      if (canMove) {
+        moveWhitePiece(movePiece.fromY, movePiece.fromX, movePiece.toY, movePiece.toX);
+      }
+    }
+  }, [movePiece])
   
 
   const squareWidth = boardWidth / xAxis.length
@@ -152,23 +172,9 @@ function Board() {
     return -1;   // Not found
   }
   
-  function movePiece(pieceType, fromY, fromX, toY, toX) {
+  function updatePiece(pieceType, fromY, fromX, toY, toX) {
+    setMovePiece({pieceType: pieceType, fromY: fromY, fromX: fromX, toY: toY, toX: toX})
     
-    if (pieceType === PieceType.BLACK) {
-      
-      const canMove = !isBlackMarked(toY, toX) && !isWhiteMarked(toY, toX);
-      if (canMove) {
-        moveBlackPiece(fromY, fromX, toY, toX);
-      }
-    
-    } else if (pieceType === PieceType.WHITE) {
-
-      const canMove = !isWhiteMarked(toY, toX) && !isBlackMarked(toY, toX);
-      if (canMove) {
-        moveWhitePiece(fromY, fromX, toY, toX);
-      }
-    }
-
   }
 
   function moveBlackPiece(fromY, fromX, toY, toX) {
@@ -204,7 +210,6 @@ function Board() {
   }
 
   function enterAGame() {
-    console.log("setBoardStatus(ENTER_A_GAME);")
     setBoardStatus(ENTER_A_GAME);
   }
 
@@ -217,8 +222,9 @@ function Board() {
       <br/>
 
       <input type="text" value={enterGameCode} onChange={(event) => setEnterGameCode(event.target.value)} /> <Button onClick={enterAGame}>Enter a game</Button>
-      {enterGameCode}
-      <div className='board'>
+      
+      {boardStatus === PLAYING &&
+        <div className='board'>
           {yAxis.map((yItem) => 
             xAxis.map((xItem) => {
 
@@ -228,7 +234,7 @@ function Board() {
                 yPosition={yItem}
                 squareWidth={squareWidth}
                 squareHeight={squareHeight}
-                movePiece={movePiece}
+                movePiece={updatePiece}
               >
                 {renderPiece(yItem, xItem) && 
                   <Piece  
@@ -239,7 +245,10 @@ function Board() {
               </Tile>
             })
           )}
-      </div>
+        </div>
+      }
+      
+
     </DndProvider>
   )
 }

@@ -1,7 +1,7 @@
 .board {
-    width: 500px;
+    width: 660px;
     height: 500px;
     background: #835c41;
     display: grid;
-    grid-template-columns: auto auto auto auto auto auto auto auto;
+    grid-template-columns: auto auto auto auto auto auto auto auto auto auto auto auto;
 }
