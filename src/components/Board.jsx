@@ -2,7 +2,7 @@ import React, { useEffect, useRef, useState } from 'react'
 import "./Board.css";
 import Tile from "./Tile";
 import Piece, { PieceType } from './Piece';
-import useWebSocket from 'react-use-websocket';
+import useWebSocket, { ReadyState } from 'react-use-websocket';
 import uuid from 'react-uuid'
 import { DndProvider } from 'react-dnd';
 import { HTML5Backend } from 'react-dnd-html5-backend';
@@ -59,16 +59,18 @@ const CREATE_NEW_GAME_OR_ENTER_A_GAME = "create_new_game_or_enter_a_game";
 const PLAYING = "playing";
 
 // Connection status
-const CONNECTED = "connected";
 const CONNECTING = "connecting";
-const DISCONNECTED = "disconnected";
+const OPEN = "open";
+const CONNECTED = "connected";
+const CLOSING = "closing";
+const CLOSED = "closed";
 
 function Board() {
 
   const boardId = useRef("");
   const userId = useRef("");
   
-  const [connectionStatus, setStatusConnection] = useState("");
+  const [connectionStatus, setConnectionStatus] = useState(CLOSED);
   const [boardStatus, setBoardStatus] = useState(CREATE_NEW_GAME_OR_ENTER_A_GAME);
   const [blackPositions, setBlackPositions] = useState(initialBlackPositions);
   const [whitePositions, setWhitePositions] = useState(initialWhitePositions);
@@ -81,15 +83,20 @@ function Board() {
     userId.current = getOrCreateUserId();
   }, [])
   
-
-  const { sendJsonMessage } = useWebSocket(WS_URL, {
+  const { sendJsonMessage, readyState } = useWebSocket(WS_URL, {
     share: true,
     onOpen: () => {
-      setStatusConnection(CONNECTED);
+      setConnectionStatus(CONNECTED);
     },
-    onError: (err) => {
-      setStatusConnection(DISCONNECTED);
+    onReconnectStop: (number) => {
+      setConnectionStatus(CLOSED);
     },
+    shouldReconnect: (closeEvent) => {
+      setConnectionStatus(CONNECTING);
+      return true;
+    },
+    reconnectAttempts: 10,
+    reconnectInterval: 5000,
     onMessage: (message) => {
       const data = JSON.parse(message.data);
       console.log(data)
@@ -160,6 +167,20 @@ function Board() {
 
   const squareWidth = boardWidth / xAxis.length
   const squareHeight = boardHeight / yAxis.length
+
+  function readyStateToConnectionStatus(readyState) {
+    console.log(readyState)
+    if (readyState == ReadyState.CONNECTING) {
+      return CONNECTING;
+    } else if (readyState == ReadyState.CLOSED) {
+      return CLOSED;
+    } else if (readyState == ReadyState.CLOSING) {
+      return CLOSING;
+    } else if (readyState == ReadyState.OPEN) {
+      return OPEN;
+    }
+    return "Undefined";
+  }
 
   function isWhiteMarked(yPosition, xPosition) {
     return whitePositions.some(row => row[0] === yPosition && row[1] === xPosition); 
@@ -248,6 +269,10 @@ function Board() {
     
     <DndProvider backend={HTML5Backend}>
       
+      {connectionStatus}
+
+      <br />
+
       <Button onClick={createNewGame}>Create new Game</Button>
 
       {gameAccessCode}
