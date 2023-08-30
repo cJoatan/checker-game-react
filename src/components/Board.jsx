@@ -3,6 +3,7 @@ import "./Board.css";
 import Tile from "./Tile";
 import Piece, { PieceType } from './Piece';
 import useWebSocket from 'react-use-websocket';
+import uuid from 'react-uuid'
 import { DndProvider } from 'react-dnd';
 import { HTML5Backend } from 'react-dnd-html5-backend';
 import { Button } from 'react-bootstrap';
@@ -60,6 +61,8 @@ const PLAYING = "playing";
 function Board() {
 
   const boardId = useRef("");
+  const userId = useRef("");
+  
   const [boardStatus, setBoardStatus] = useState(CREATE_NEW_GAME_OR_ENTER_A_GAME);
   const [blackPositions, setBlackPositions] = useState(initialBlackPositions);
   const [whitePositions, setWhitePositions] = useState(initialWhitePositions);
@@ -67,6 +70,11 @@ function Board() {
   const [gameAccessCode, setGameAccessCode] = useState("");
   const [enterGameCode, setEnterGameCode] = useState("");
   const [movePiece, setMovePiece] = useState({});
+
+  useEffect(() => {
+    userId.current = getOrCreateUserId();
+  }, [])
+  
 
   const { sendJsonMessage } = useWebSocket(WS_URL, {
     share: true,
@@ -99,6 +107,7 @@ function Board() {
     
     sendJsonMessage({
       id: boardId.current,
+      userId: userId.current,
       type: 'content_change',
       content: {
         whitePositions: whitePositions,
@@ -111,6 +120,7 @@ function Board() {
   useEffect(() => {
     if (boardStatus === ENTER_A_GAME) {
       sendJsonMessage({
+        userId: userId.current,
         type: 'enter_a_game',
         code: enterGameCode,
         content: {
@@ -195,22 +205,31 @@ function Board() {
     setBoardUpdate(prevUpdate => prevUpdate + 1)
   }
 
-  function removePiecePiece(positionY, positionX) {
-    setBlackPositions((prevPositions) => {
-      const blackIndex = getPiecesIndex(prevPositions, positionY, positionX);
-      const filtered = prevPositions.filter((item, index) => index != blackIndex);
-      return filtered
-    })
-  }
-
   function createNewGame() {
     sendJsonMessage({
-      type: 'create_new_game'
+      type: 'create_new_game',
+      id: boardId.current,
+      userId: userId.current
     })
   }
 
   function enterAGame() {
     setBoardStatus(ENTER_A_GAME);
+  }
+
+  function getOrCreateUserId() {
+    
+    const userId = localStorage.getItem('checkGameUserId');
+
+    if (!!userId) {
+      return userId;
+    }
+    else {
+      const newUserId = uuid();
+      localStorage.setItem('checkGameUserId', newUserId)
+      return newUserId;
+    }
+
   }
 
   return (
@@ -221,7 +240,8 @@ function Board() {
       {gameAccessCode}
       <br/>
 
-      <input type="text" value={enterGameCode} onChange={(event) => setEnterGameCode(event.target.value)} /> <Button onClick={enterAGame}>Enter a game</Button>
+      <input type="text" value={enterGameCode} onChange={(event) => setEnterGameCode(event.target.value)} /> 
+      <Button onClick={enterAGame}>Enter a game</Button>
       
       {boardStatus === PLAYING &&
         <div className='board'>
