@@ -58,11 +58,17 @@ const ENTER_A_GAME = "enter_a_game";
 const CREATE_NEW_GAME_OR_ENTER_A_GAME = "create_new_game_or_enter_a_game";
 const PLAYING = "playing";
 
+// Connection status
+const CONNECTED = "connected";
+const CONNECTING = "connecting";
+const DISCONNECTED = "disconnected";
+
 function Board() {
 
   const boardId = useRef("");
   const userId = useRef("");
   
+  const [connectionStatus, setStatusConnection] = useState("");
   const [boardStatus, setBoardStatus] = useState(CREATE_NEW_GAME_OR_ENTER_A_GAME);
   const [blackPositions, setBlackPositions] = useState(initialBlackPositions);
   const [whitePositions, setWhitePositions] = useState(initialWhitePositions);
@@ -79,10 +85,10 @@ function Board() {
   const { sendJsonMessage } = useWebSocket(WS_URL, {
     share: true,
     onOpen: () => {
-      console.log("ISOPENDED")
+      setStatusConnection(CONNECTED);
     },
     onError: (err) => {
-      console.warn(err)
+      setStatusConnection(DISCONNECTED);
     },
     onMessage: (message) => {
       const data = JSON.parse(message.data);
@@ -99,6 +105,8 @@ function Board() {
         setGameAccessCode(prev => data.code);
       } else if (data.status === "START_GAME") {
         setBoardStatus(prev => PLAYING);
+        setBlackPositions(prevPos => data.content.blackPositions);
+        setWhitePositions(prevPos => data.content.whitePositions);
       }
     }
   })
@@ -209,7 +217,11 @@ function Board() {
     sendJsonMessage({
       type: 'create_new_game',
       id: boardId.current,
-      userId: userId.current
+      userId: userId.current,
+      content: {
+        whitePositions: whitePositions,
+        blackPositions: blackPositions
+      }
     })
   }
 
@@ -233,8 +245,9 @@ function Board() {
   }
 
   return (
+    
     <DndProvider backend={HTML5Backend}>
-
+      
       <Button onClick={createNewGame}>Create new Game</Button>
 
       {gameAccessCode}
