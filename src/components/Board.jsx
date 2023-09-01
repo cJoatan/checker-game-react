@@ -6,7 +6,7 @@ import useWebSocket, { ReadyState } from 'react-use-websocket';
 import uuid from 'react-uuid'
 import { DndProvider } from 'react-dnd';
 import { HTML5Backend } from 'react-dnd-html5-backend';
-import { Button } from 'react-bootstrap';
+import { Button, Col, Form, FormControl, InputGroup, Row } from 'react-bootstrap';
 
 const WS_URL = "ws://localhost:8080/echoHandler"
 
@@ -54,6 +54,7 @@ const deadZone = [
 const boardWidth = 660;
 const boardHeight = 500;
 
+// GAME STATUS
 const ENTER_A_GAME = "enter_a_game";
 const CREATE_NEW_GAME_OR_ENTER_A_GAME = "create_new_game_or_enter_a_game";
 const PLAYING = "playing";
@@ -64,6 +65,13 @@ const OPEN = "open";
 const CONNECTED = "connected";
 const CLOSING = "closing";
 const CLOSED = "closed";
+
+//CHAT STATUS
+
+const SEND_MESSAGE = "send_message";
+const RECEIVE_MESSAGE = "receive_message";
+const SENDING = "sending";
+const DONE = "done";
 
 function Board() {
 
@@ -78,6 +86,10 @@ function Board() {
   const [gameAccessCode, setGameAccessCode] = useState("");
   const [enterGameCode, setEnterGameCode] = useState("");
   const [movePiece, setMovePiece] = useState({});
+
+  const [chatMessages, setChatMessages] = useState([]);
+  const [chatText, setChatText] = useState("");
+  const [sentTextMessageStatus, setSentTextMessageStatus] = useState(DONE);
 
   useEffect(() => {
     userId.current = getOrCreateUserId();
@@ -114,6 +126,16 @@ function Board() {
         setBoardStatus(prev => PLAYING);
         setBlackPositions(prevPos => data.content.blackPositions);
         setWhitePositions(prevPos => data.content.whitePositions);
+      } else if (data.type === "send_chat_message") {
+        setChatMessages([
+          ...chatMessages, 
+          {
+            userId: data.userId,
+            order: data.order,
+            messageText: data.messageText
+          }
+        ]);
+        setSentTextMessageStatus(DONE);
       }
     }
   })
@@ -163,24 +185,21 @@ function Board() {
       }
     }
   }, [movePiece])
+
+  useEffect(() => {
+    if (sentTextMessageStatus === SEND_MESSAGE) {
+      sendJsonMessage({
+        type: 'send_chat_message',
+        id: boardId.current,
+        userId: userId.current,
+        messageText: chatText
+      })
+    }
+  }, [sentTextMessageStatus])
   
 
   const squareWidth = boardWidth / xAxis.length
   const squareHeight = boardHeight / yAxis.length
-
-  function readyStateToConnectionStatus(readyState) {
-    console.log(readyState)
-    if (readyState == ReadyState.CONNECTING) {
-      return CONNECTING;
-    } else if (readyState == ReadyState.CLOSED) {
-      return CLOSED;
-    } else if (readyState == ReadyState.CLOSING) {
-      return CLOSING;
-    } else if (readyState == ReadyState.OPEN) {
-      return OPEN;
-    }
-    return "Undefined";
-  }
 
   function isWhiteMarked(yPosition, xPosition) {
     return whitePositions.some(row => row[0] === yPosition && row[1] === xPosition); 
@@ -266,48 +285,73 @@ function Board() {
   }
 
   return (
-    
-    <DndProvider backend={HTML5Backend}>
-      
-      {connectionStatus}
+    <>
+      <DndProvider backend={HTML5Backend}>
+        
+        {connectionStatus}
 
-      <br />
+        <br />
 
-      <Button onClick={createNewGame}>Create new Game</Button>
+        <Button onClick={createNewGame}>Create new Game</Button>
 
-      {gameAccessCode}
-      <br/>
+        {gameAccessCode}
+        <br/>
 
-      <input type="text" value={enterGameCode} onChange={(event) => setEnterGameCode(event.target.value)} /> 
-      <Button onClick={enterAGame}>Enter a game</Button>
-      
-      {boardStatus === PLAYING &&
-        <div className='board'>
-          {yAxis.map((yItem) => 
-            xAxis.map((xItem) => {
+        <input type="text" value={enterGameCode} onChange={(event) => setEnterGameCode(event.target.value)} /> 
+        <Button onClick={enterAGame}>Enter a game</Button>
+        
+        {boardStatus === PLAYING &&
+          <>
+            <div className='board'>
+              {yAxis.map((yItem) => 
+                xAxis.map((xItem) => {
 
-              return <Tile
-                key={"tile" + yItem + xItem}
-                xPosition={xItem}
-                yPosition={yItem}
-                squareWidth={squareWidth}
-                squareHeight={squareHeight}
-                movePiece={updatePiece}
-              >
-                {renderPiece(yItem, xItem) && 
-                  <Piece  
+                  return <Tile
+                    key={"tile" + yItem + xItem}
                     xPosition={xItem}
                     yPosition={yItem}
-                    pieceType={pieceType(yItem, xItem)} 
-                  />}
-              </Tile>
-            })
-          )}
-        </div>
-      }
-      
+                    squareWidth={squareWidth}
+                    squareHeight={squareHeight}
+                    movePiece={updatePiece}
+                  >
+                    {renderPiece(yItem, xItem) && 
+                      <Piece  
+                        xPosition={xItem}
+                        yPosition={yItem}
+                        pieceType={pieceType(yItem, xItem)} 
+                      />}
+                  </Tile>
+                })
+              )}
+            </div>
 
-    </DndProvider>
+            <Row>
+              <Col>
+
+                <Form.Group controlId="exampleForm.ControlTextarea1">
+                  <Form.Label>Chat</Form.Label>
+                  <Form.Control as="textarea" rows={3} value={chatText} onChange={(event) => setChatText(event.target.value)} />
+                </Form.Group>
+                <Button onClick={() => setSentTextMessageStatus(SEND_MESSAGE)}>Send</Button>
+
+              </Col>
+
+              <Col>
+                {chatMessages.map((item, index) => {
+                  return <div key={index}>
+                    <span className={item.userId === userId.current ? "float-left" : "float-right"}>{item.messageText}</span>
+                    <br />
+                  </div>
+                })}
+              </Col>
+
+            </Row>
+          </>
+        }
+        
+      </DndProvider>
+
+    </>
   )
 }
 
